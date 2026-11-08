@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 5.1
 <#
 .SYNOPSIS
   Install dsh-memory-plus into a DSH profile (default: desktop).
@@ -9,6 +9,9 @@
   cordis.patch.yml, installs the two local packages as file: links, appends
   the mount rows (idempotent), and verifies the composed config.
 
+  ASCII-only on purpose: Windows PowerShell 5.1 reads BOM-less scripts with
+  the ANSI code page, so non-ASCII text here would corrupt string literals.
+
 .PARAMETER Profile
   Target profile name under $DSH_HOME/profiles (default: desktop).
 
@@ -16,7 +19,7 @@
   Path to the dsh-memory-plus checkout (default: this repository).
 
 .EXAMPLE
-  pwsh -File scripts/install-desktop.ps1
+  powershell -File scripts/install-desktop.ps1
 #>
 param(
   [string]$Profile = 'desktop',
@@ -24,13 +27,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $profDir = Join-Path $env:USERPROFILE ".dsh\profiles\$Profile"
 $pkgJson = Join-Path $profDir 'package.json'
 $patch = Join-Path $profDir 'cordis.patch.yml'
 
 if (-not (Test-Path $pkgJson)) { throw "profile not found: $profDir" }
 if (Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue) {
-  throw 'DSH 正在运行。请先完全退出 DeepSeek Harness（窗口与托盘），再运行本脚本。'
+  throw 'DSH is running. Quit DeepSeek Harness completely (window and tray), then rerun this script.'
 }
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -42,7 +46,7 @@ $mem = Join-Path $Repo 'packages\memory'
 $con = Join-Path $Repo 'packages\memory-consolidation'
 foreach ($entry in @($mem, $con)) {
   if (-not (Test-Path (Join-Path $entry 'lib\index.js'))) {
-    throw "build missing: $entry\lib\index.js — run 'pnpm build' in $Repo first"
+    throw "build missing: $entry\lib\index.js - run 'pnpm build' in $Repo first"
   }
 }
 
@@ -62,9 +66,9 @@ $mount = @'
         extractMinSurfaceEvents: 8
         extractMaxPerHour: 8
 '@
-$patchText = Get-Content $patch -Raw
+$patchText = [System.IO.File]::ReadAllText($patch)
 if ($patchText -notmatch 'id: memory-plus') {
-  Add-Content -Path $patch -Value $mount -Encoding utf8
+  [System.IO.File]::AppendAllText($patch, $mount, $utf8NoBom)
   Write-Host 'mount rows appended'
 } else {
   Write-Host 'mount rows already present'
@@ -76,4 +80,4 @@ if ($dump -notmatch 'memory-plus' -or $dump -notmatch 'memory-consolidation-plus
 }
 Write-Host 'verified: composed config contains memory-plus and memory-consolidation-plus'
 Write-Host ''
-Write-Host "下一步：启动 DeepSeek Harness，新开会话；首轮应出现 memory 段，模型可调用 memory_search / memory_read。" -ForegroundColor Green
+Write-Host 'Next: start DeepSeek Harness and open a new session. The first turn should show a memory section; the model can call memory_search / memory_read.'

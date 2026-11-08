@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 5.1
 <#
 .SYNOPSIS
   Remove dsh-memory-plus from a DSH profile and restore its config backups.
@@ -8,29 +8,33 @@
   from package.json via pnpm, cuts the mount block out of cordis.patch.yml, and
   restores the newest *.bak-memplus-* copy of package.json.
 
+  ASCII-only and explicit UTF-8 IO on purpose: Windows PowerShell 5.1 otherwise
+  reads and rewrites the YAML patch with the ANSI code page and corrupts the
+  file's Chinese comments.
+
 .PARAMETER Profile
   Target profile name (default: desktop).
 #>
 param([string]$Profile = 'desktop')
 
 $ErrorActionPreference = 'Stop'
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $profDir = Join-Path $env:USERPROFILE ".dsh\profiles\$Profile"
 $pkgJson = Join-Path $profDir 'package.json'
 $patch = Join-Path $profDir 'cordis.patch.yml'
 
 if (Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue) {
-  throw 'DSH 正在运行。请先完全退出 DeepSeek Harness，再运行本脚本。'
+  throw 'DSH is running. Quit DeepSeek Harness completely, then rerun this script.'
 }
 
 dsh plugin --profile $Profile remove dsh-memory-plus dsh-memory-consolidation-plus 2>$null
 
 if (Test-Path $patch) {
-  $text = Get-Content $patch -Raw
-  $pattern = '(?ms)\r?\n?# dsh-memory-plus mount.*?(?=\r?\n- |\z)'
-  $new = [regex]::Replace($text, $pattern, '')
+  $text = [System.IO.File]::ReadAllText($patch)
+  $new = [regex]::Replace($text, '(?ms)\r?\n# dsh-memory-plus mount.*?(?=\r?\n- |\z)', '')
   $new = [regex]::Replace($new, '(?ms)\r?\n- insert:\r?\n    - id: memory-plus\r?\n(?:      .*\r?\n)*?(?=\r?\n- |\z)', '')
   if ($new -ne $text) {
-    Set-Content -Path $patch -Value $new.TrimEnd() -NoNewline -Encoding utf8
+    [System.IO.File]::WriteAllText($patch, $new.TrimEnd(), $utf8NoBom)
     Write-Host 'mount rows removed'
   }
 }
