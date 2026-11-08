@@ -438,6 +438,11 @@ async function runDream(
   const priorAt = await tryAcquireLock(fs, dir, process.pid, now, policy, lockStaleMs)
   if (priorAt === null) {
     ctx.logger.warn(`memory-consolidation: consolidation lock held by a live holder in ${dir}`)
+    await recordDreamDiagnostic(ctx, fs, dir, policy, {
+      sessionId: agent.session.header.id,
+      phase: 'dispatch-blocked',
+      detail: 'consolidation lock held',
+    })
     return
   }
   // Diagnostics + lock hygiene from here on: everything after the acquire can
@@ -472,7 +477,13 @@ async function runDream(
       if (outcome.status === 'completed') {
         // Success tombs the marker in BOTH modes: a successful periodic dream
         // rebuilds the index, so a stale pending marker is obsolete by definition.
-        void clearPressure(fs, dir, now, policy)
+        await clearPressure(fs, dir, Date.now(), policy)
+        const after = await readPressure(fs, dir)
+        await recordDreamDiagnostic(ctx, fs, dir, policy, {
+          sessionId,
+          phase: 'outcome-completed',
+          detail: `pressureArmedAt=${after.armedAt}`,
+        })
         return
       }
       await recordDreamDiagnostic(ctx, fs, dir, policy, {
@@ -501,7 +512,13 @@ async function runDream(
           clearTimeout(retryWatchdog)
           ctx.logger.debug({ event: 'memory:dream-outcome', retry: true, status: retryOutcome.status, detail: retryOutcome.status === 'failed' ? retryOutcome.detail : undefined })
           if (retryOutcome.status === 'completed') {
-            void clearPressure(fs, dir, now, policy)
+            await clearPressure(fs, dir, Date.now(), policy)
+            const afterRetry = await readPressure(fs, dir)
+            await recordDreamDiagnostic(ctx, fs, dir, policy, {
+              sessionId,
+              phase: 'outcome-completed',
+              detail: `retry pressureArmedAt=${afterRetry.armedAt}`,
+            })
             return
           }
           await recordDreamDiagnostic(ctx, fs, dir, policy, {

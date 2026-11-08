@@ -25,7 +25,13 @@ import type { MemoryWritePolicy } from 'dsh-memory-plus'
 export const DREAM_DIAGNOSTIC_FILE = '.dream-last-error.json'
 
 /** The death mode the entry records. */
-export type DreamDiagnosticPhase = 'dispatch-started' | 'dispatch-throw' | 'outcome-failed' | 'outcome-timeout'
+export type DreamDiagnosticPhase =
+  | 'dispatch-started'
+  | 'dispatch-throw'
+  | 'dispatch-blocked'
+  | 'outcome-failed'
+  | 'outcome-timeout'
+  | 'outcome-completed'
 
 /** One diagnostic record; written as `{ at, pid, ...entry }` JSON. */
 export interface DreamDiagnosticEntry {
