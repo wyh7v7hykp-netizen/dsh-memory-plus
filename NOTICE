@@ -1,0 +1,31 @@
+dsh-memory-plus
+===============
+
+This distribution contains modified source derived from:
+
+  @dsh-cc/memory               v0.9.3
+  @dsh-cc/memory-consolidation v0.9.3
+  https://github.com/dsh-cc/dsh-cc
+  Copyright the dsh-cc contributors
+  Licensed under the Apache License, Version 2.0
+
+Modifications (2026-11-08):
+
+  * Renamed the packages to dsh-memory-plus and
+    dsh-memory-consolidation-plus and made them independently installable
+    (esbuild build; no deepseek-harness source checkout required).
+  * Added the memory_search and memory_read model tools
+    (packages/memory/src/search.ts, src/search-core.ts).
+  * Added turn-end extraction cost gates
+    (packages/memory-consolidation/src/extract-gates.ts) and the
+    extractMinIntervalMinutes / extractMinSurfaceEvents / extractMaxPerHour
+    configuration keys.
+  * Added unit tests for the search core, the gates, and the tool
+    registration contract.
+
+The upstream NOTICE in the original repository has been preserved in substance
+by the attribution above; the full Apache License 2.0 text is in LICENSE.
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.

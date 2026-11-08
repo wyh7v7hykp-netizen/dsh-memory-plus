@@ -1,0 +1,48 @@
+{
+  "name": "dsh-memory-consolidation-plus",
+  "version": "0.9.3-plus.1",
+  "description": "dsh-memory-consolidation-plus: background memory consolidation for DSH (turn-end extraction + three-gate dream) with cost gates that bound per-turn forks",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "memory",
+    "consolidation",
+    "dream"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wyh7v7hykp-netizen/dsh-memory-plus.git",
+    "directory": "packages/memory-consolidation"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-fs": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-jobs": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-session": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-subagent": ">=0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "dependencies": {
+    "dsh-memory-plus": "file:../memory"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

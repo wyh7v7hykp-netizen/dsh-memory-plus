@@ -1,0 +1,50 @@
+{
+  "name": "dsh-memory-plus",
+  "version": "0.9.3-plus.1",
+  "description": "dsh-memory-plus: Claude Code-style file-based cross-session memory for DSH, with an on-demand memory_search tool and richer recall",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "memory",
+    "cross-session",
+    "claude-code"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wyh7v7hykp-netizen/dsh-memory-plus.git",
+    "directory": "packages/memory"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-fs": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-session": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-subagent": ">=0.2.1-rc.5",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "dependencies": {
+    "@dsh-cc/model-aliases": "^0.9.3",
+    "@dsh-cc/tools": "^0.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
