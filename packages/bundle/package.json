@@ -1,6 +1,6 @@
 {
     "name":  "dsh-memory-plus-bundle",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description":  "DSH bundle wrapper: mounts dsh-memory-plus + dsh-memory-consolidation-plus as one live plugin layer",
     "type":  "module",
     "license":  "Apache-2.0",

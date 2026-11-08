@@ -266,7 +266,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     if (config.dreamEnabled ?? true) {
       if (!dreamInFlight) {
         dreamInFlight = true
-        void runDream(ctx, agent, home, provider, minHours, minSessions, pressureCooldownMinutes, sessionsRoot, scan, dreamTimeoutMinutes)
+        void runDream(ctx, agent, home, provider, minHours, minSessions, pressureCooldownMinutes, sessionsRoot, scan, dreamTimeoutMinutes, lockStaleMs, config.dreamRequireSessions ?? false)
           .catch((err) => { ctx.logger.warn(`memory-consolidation: dream dispatch failed: ${String(err)}`) })
           .finally(() => { dreamInFlight = false })
       }
@@ -397,6 +397,8 @@ async function runDream(
   sessionsRoot: string,
   scan: () => Promise<SessionScanResult>,
   dreamTimeoutMinutes: number,
+  lockStaleMs: number,
+  requireSessions: boolean,
 ): Promise<void> {
   const fs = ctx.get('fs')
   if (fs === undefined) return
@@ -406,6 +408,7 @@ async function runDream(
   const pressure = await readPressure(fs, dir)
   const lastAt = await readLastConsolidatedAt(fs, dir)
   let hints: readonly string[]
+  let scanNote = ''
   if (pressure.armedAt > 0) {
     // Pressure mode: an armed marker bypasses the time/session gates. The
     // cooldown is measured from `lastForcedAt` (not `armedAt`) so a tight arm
@@ -425,6 +428,7 @@ async function runDream(
     // nothing to roll back and the next cooldown window retries.
     const scanResult = await scan()
     const window = gateWindow(scanResult.sessions, lastAt)
+    scanNote = `mode=pressure scanned=${scanResult.scanned} root=${sessionsRoot}`
     ctx.logger.debug({ event: 'memory:dream-gates', mode: 'pressure', lastAt, count: window.count, minSessions, pass: true, scanned: scanResult.scanned })
     // A zero scan used to return silently, which consumed the pressure stamp
     // and made every pressure dream vanish without a trace. The hints are
@@ -435,7 +439,7 @@ async function runDream(
         phase: 'dispatch-scan-empty',
         detail: `scanned=0 root=${sessionsRoot}`,
       })
-      if (config.dreamRequireSessions ?? false) return
+      if (requireSessions) return
     }
     hints = window.hints
   } else {
@@ -448,6 +452,7 @@ async function runDream(
     const scanResult = await scan()
     const window = gateWindow(scanResult.sessions, lastAt)
     const pass = sessionGatePasses(window.count, minSessions)
+    scanNote = `mode=periodic scanned=${scanResult.scanned} count=${window.count}`
     ctx.logger.debug({ event: 'memory:dream-gates', mode: 'periodic', lastAt, count: window.count, minSessions, pass })
     if (!pass) return
     hints = window.hints
@@ -468,7 +473,7 @@ async function runDream(
   // before the rollback (plan 搂2.2, review Major-1/Major-2).
   const sessionId = agent.session.header.id
   try {
-    await recordDreamDiagnostic(ctx, fs, dir, policy, { sessionId, phase: 'dispatch-started', detail: '' })
+    await recordDreamDiagnostic(ctx, fs, dir, policy, { sessionId, phase: 'dispatch-started', detail: scanNote })
     const prompt = buildConsolidationPrompt(dir, sessionsRoot, hints)
     const job = await startMemoryJob(ctx, agent, dir, provider, 'memory-consolidation', prompt)
     // Watchdog: a dream fork whose result never settles must not hold the lock
