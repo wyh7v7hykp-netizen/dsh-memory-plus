@@ -93,6 +93,12 @@ export interface Config {
   /** Abort a turn-end extraction fork that never settles (default 5). */
   extractTimeoutMinutes?: number
   /**
+   * Refuse a pressure dream when the session scan found no sessions
+   * (default false: still consolidate from the memory directory alone, with
+   * empty provenance hints). Periodic dreams always require the scan.
+   */
+  dreamRequireSessions?: boolean
+  /**
    * Minimum minutes between two turn-end extractions in one session
    * (default 5). The extraction fork inherits the conversation, so its cost
    * grows with the session; this is the cheapest brake.
@@ -125,6 +131,7 @@ export const Config: z<Config> = z.object({
   extractMaxPerHour: z.number().default(8),
   dreamTimeoutMinutes: z.number().default(10),
   extractTimeoutMinutes: z.number().default(5),
+  dreamRequireSessions: z.boolean().default(false),
 })
 
 
@@ -418,8 +425,18 @@ async function runDream(
     // nothing to roll back and the next cooldown window retries.
     const scanResult = await scan()
     const window = gateWindow(scanResult.sessions, lastAt)
-    ctx.logger.debug({ event: 'memory:dream-gates', mode: 'pressure', lastAt, count: window.count, minSessions, pass: true })
-    if (scanResult.scanned === 0) return
+    ctx.logger.debug({ event: 'memory:dream-gates', mode: 'pressure', lastAt, count: window.count, minSessions, pass: true, scanned: scanResult.scanned })
+    // A zero scan used to return silently, which consumed the pressure stamp
+    // and made every pressure dream vanish without a trace. The hints are
+    // provenance only; the dream can still consolidate the memory directory.
+    if (scanResult.scanned === 0) {
+      await recordDreamDiagnostic(ctx, fs, dir, policy, {
+        sessionId: agent.session.header.id,
+        phase: 'dispatch-scan-empty',
+        detail: `scanned=0 root=${sessionsRoot}`,
+      })
+      if (config.dreamRequireSessions ?? false) return
+    }
     hints = window.hints
   } else {
     // Periodic: the pure-arithmetic time gate runs FIRST, before any scan I/O;

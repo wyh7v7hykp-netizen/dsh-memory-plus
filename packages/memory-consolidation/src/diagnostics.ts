@@ -29,6 +29,7 @@ export type DreamDiagnosticPhase =
   | 'dispatch-started'
   | 'dispatch-throw'
   | 'dispatch-blocked'
+  | 'dispatch-scan-empty'
   | 'outcome-failed'
   | 'outcome-timeout'
   | 'outcome-completed'

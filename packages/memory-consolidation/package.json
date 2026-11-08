@@ -1,6 +1,6 @@
 {
     "name":  "dsh-memory-consolidation-plus",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description":  "dsh-memory-consolidation-plus: background memory consolidation for DSH (turn-end extraction + three-gate dream) with cost gates that bound per-turn forks",
     "type":  "module",
     "main":  "./lib/index.js",

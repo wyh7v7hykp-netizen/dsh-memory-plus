@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Prompt builders for the extraction and dream forks. Both are pure text
  * assembly so they are unit-testable and stable model-visible contracts.
  *
@@ -73,7 +73,9 @@ export function buildConsolidationPrompt(
     `You may use only: ${MEMORY_AGENT_TOOLS.join(', ')}.`,
     '',
     `Session provenance hints (ids under \`${sessionsRoot}\`):`,
-    ...sessionHints.map(id => `- ${id}`),
+    ...(sessionHints.length > 0
+      ? sessionHints.map(id => `- ${id}`)
+      : ['(none — the session scan found nothing; consolidate from the memory directory alone)']),
     '',
     'FINAL CONTRACT: your turn is incomplete until you have called `structured_output` with the full report. Plans or findings narrated in prose without that call are discarded entirely 鈥?there is no partial credit, and no one will ask you twice.',
   ].join('\n')
