@@ -4,6 +4,27 @@ All notable changes to **dsh-memory-plus**. This project is a fork of
 [`@dsh-cc/memory`](https://github.com/dsh-cc/dsh-cc) v0.9.3 (Apache-2.0); see
 [NOTICE](./NOTICE) for attribution and the list of modifications.
 
+## [1.2.0] - 2026-11-08
+
+Forgetting, phase B: rank by freshness, delete nothing.
+
+### Added
+
+- Usage ledger `.memory-usage.json`: `absolute topic path → last-used epoch ms`.
+  Written on `memory_save`, `memory_read`, and every `memory_search` hit, so the
+  freshest topics stay near the top. Pruned after 365 days.
+- `recencyFactor(lastUsedAt, now, halfLifeDays)` ranking multiplier: 1.0 when
+  used today, half-life 90 days, floored at 0.5. Unknown entries (predating
+  the ledger) stay neutral at 1.0. Nothing is ever removed.
+- Search options `usage` / `now` / `halfLifeDays` / `decayEnabled`; config
+  `decayHalfLifeDays` (default 90).
+
+### Verified
+
+- 39 tests, including ledger read/prune, `recencyFactor` values, and a ranking
+  case where a recently used topic outranks a 200-day-old one.
+- Live: a search created `.memory-usage.json` with the five returned topics.
+
 ## [1.1.0] - 2026-11-08
 
 Cost and recall quality pass.

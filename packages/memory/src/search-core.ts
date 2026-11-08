@@ -48,6 +48,30 @@ export interface MemorySearchOptions {
   type?: string
   /** Search one layer or both (default all). */
   scope?: MemoryScope | 'all'
+  /** Usage ledger: absolute topic path → last-used epoch ms. */
+  usage?: Readonly<Record<string, number>>
+  /** Clock used for the freshness factor (default Date.now()). */
+  now?: number
+  /** Freshness half-life in days (default 90). */
+  halfLifeDays?: number
+  /** Apply the freshness factor (default true). */
+  decayEnabled?: boolean
+}
+
+/**
+ * Freshness multiplier for ranking: 1.0 when used today, decaying by half every
+ * `halfLifeDays`, floored at 0.5 so old-but-valid memories never disappear from
+ * the results — they only rank lower. Unknown entries (predating the ledger)
+ * stay neutral at 1.0.
+ * @param lastUsedAt - epoch ms of the last use, or undefined.
+ * @param now - current epoch ms.
+ * @param halfLifeDays - days after which the bonus halves.
+ */
+export function recencyFactor(lastUsedAt: number | undefined, now: number, halfLifeDays: number): number {
+  if (lastUsedAt === undefined || !Number.isFinite(lastUsedAt) || lastUsedAt <= 0) return 1
+  const halfLife = Math.max(halfLifeDays, 1)
+  const ageDays = Math.max(0, now - lastUsedAt) / 86_400_000
+  return 0.5 + 0.5 * Math.pow(0.5, ageDays / halfLife)
 }
 
 /** English function words that would otherwise match every document. */
@@ -271,13 +295,18 @@ export function searchMemoryDocs(
   const limit = Math.min(Math.max(options.limit ?? 5, 1), 20)
   const type = options.type
   const scope = options.scope ?? 'all'
+  const usage = options.usage
+  const now = options.now ?? Date.now()
+  const halfLifeDays = options.halfLifeDays ?? 90
+  const decayEnabled = options.decayEnabled ?? true
   const hits: MemoryHit[] = []
   for (const doc of docs) {
     if (scope !== 'all' && doc.scope !== scope) continue
     if (type !== undefined && doc.type !== type) continue
-    const score = scoreMemoryDoc(doc, terms, phrase)
-    if (score <= 0) continue
-    hits.push({ ...doc, score, snippet: buildSnippet(doc, terms) })
+    const base = scoreMemoryDoc(doc, terms, phrase)
+    if (base <= 0) continue
+    const factor = decayEnabled ? recencyFactor(usage?.[doc.path], now, halfLifeDays) : 1
+    hits.push({ ...doc, score: base * factor, snippet: buildSnippet(doc, terms) })
   }
   hits.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
   return hits.slice(0, limit)

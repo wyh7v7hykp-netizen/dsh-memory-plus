@@ -84,6 +84,7 @@ export {
   loadMemoryDocs,
   tokenizeMemoryQuery,
   expandQueryTerms,
+  recencyFactor,
   scoreMemoryDoc,
   buildSnippet,
   searchMemoryDocs,
@@ -92,6 +93,7 @@ export {
 export type { MemoryDoc, MemoryHit, MemoryScope, MemorySearchOptions } from './search.ts'
 export { healMemoryIndex, planIndexRepair, pointerFor } from './reindex.ts'
 export type { IndexTopic } from './reindex.ts'
+export { USAGE_FILE, readUsage, touchUsage } from './usage.ts'
 
 export const name = 'memory'
 /** Core services required for section registration and event listeners. */
@@ -146,6 +148,12 @@ export interface Config {
    * even when the consolidation dream is unhealthy.
    */
   indexSelfHeal?: boolean
+  /**
+   * Freshness half-life for search ranking in days (default 90). Recently used
+   * topics rank higher; old ones decay toward a 0.5 floor but are never
+   * removed. Set `decayEnabled: false` on the search call to compare.
+   */
+  decayHalfLifeDays?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -158,6 +166,7 @@ export const Config: z<Config> = z.object({
   recallMaxPerSession: z.number().default(12),
   teamEnabled: z.boolean().default(false),
   indexSelfHeal: z.boolean().default(true),
+  decayHalfLifeDays: z.number().default(90),
 })
 
 /**
@@ -220,7 +229,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       void healMemoryIndex(fs, dir)
     })
   }
-  registerMemorySearchTools(ctx, home)
+  registerMemorySearchTools(ctx, home, { halfLifeDays: config.decayHalfLifeDays ?? 90 })
   if (config.recallEnabled ?? true) {
     new MemoryRecall(ctx, home, {
       providerName: config.recallProviderName ?? 'fork',

@@ -15,6 +15,8 @@ import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { defineTool } from '@dsh-cc/tools'
 import { MEMORY_TYPES } from './types.ts'
 import { cwdOf, resolveWorkspaceMemoryDir } from './paths.ts'
+import { readUsage, touchUsage } from './usage.ts'
+import { memoryWritePolicy } from './writeback.ts'
 import {
   buildSnippet,
   clipMemoryBody,
@@ -73,7 +75,12 @@ export function renderHits(hits: readonly MemoryHit[], query: string): string {
  * @param home - the memory home root (global layer + parent of workspace layers).
  * @returns a disposer for both registrations, or `undefined` when not registered.
  */
-export function registerMemorySearchTools(ctx: Context, home: string): (() => void) | undefined {
+export function registerMemorySearchTools(
+  ctx: Context,
+  home: string,
+  options: { halfLifeDays?: number } = {},
+): (() => void) | undefined {
+  const halfLifeDays = options.halfLifeDays ?? 90
   const tools = ctx.get('tools') as { register(def: unknown): () => void } | undefined
   if (tools === undefined) return undefined
   const disposers: Array<() => void> = []
@@ -127,12 +134,25 @@ export function registerMemorySearchTools(ctx: Context, home: string): (() => vo
       if (fs === undefined) throw new Error('memory search unavailable: no fs seam')
       const dirs = resolveDirs(home, args.scope ?? 'all', exec.agent)
       const docs = []
-      for (const entry of dirs) docs.push(...await loadMemoryDocs(fs, entry.dir, entry.scope))
+      const usage: Record<string, number> = {}
+      for (const entry of dirs) {
+        docs.push(...await loadMemoryDocs(fs, entry.dir, entry.scope))
+        Object.assign(usage, await readUsage(fs, entry.dir))
+      }
+      const now = Date.now()
       const results = searchMemoryDocs(docs, args.query, {
         limit: args.limit,
         type: args.type,
         scope: args.scope ?? 'all',
+        usage,
+        now,
+        halfLifeDays,
       })
+      // Record what the model actually saw as used, per layer directory.
+      for (const entry of dirs) {
+        const used = results.filter(hit => hit.dir === entry.dir).map(hit => hit.path)
+        void touchUsage(fs, entry.dir, used, now, memoryWritePolicy(entry.dir))
+      }
       return { results, total: results.length }
     },
   })))
@@ -181,6 +201,7 @@ export function registerMemorySearchTools(ctx: Context, home: string): (() => vo
         const docs = await loadMemoryDocs(fs, entry.dir, entry.scope)
         const doc = docs.find(candidate => candidate.filename === wanted)
         if (doc === undefined) continue
+        void touchUsage(fs, entry.dir, [doc.path], Date.now(), memoryWritePolicy(entry.dir))
         const body = clipMemoryBody(doc.body, 16_000)
         return {
           found: true,

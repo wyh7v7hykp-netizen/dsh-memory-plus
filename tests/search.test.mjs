@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   tokenizeMemoryQuery,
   expandQueryTerms,
+  recencyFactor,
   scoreMemoryDoc,
   buildSnippet,
   searchMemoryDocs,
@@ -87,6 +88,27 @@ test('synonym expansion bridges 部署 and 上线', () => {
 test('synonym expansion does not invent matches', () => {
   const d = doc({ filename: 'misc.md', name: 'misc', description: 'unrelated', body: '完全无关的内容：猫咪和天气。' })
   assert.equal(searchMemoryDocs([d], '部署').length, 0)
+})
+
+test('recencyFactor: recent = 1, half-life halves the bonus, unknown = neutral', () => {
+  const now = 1_800_000_000_000
+  assert.equal(recencyFactor(now, now, 90), 1)
+  assert.ok(Math.abs(recencyFactor(now - 90 * 86_400_000, now, 90) - 0.75) < 1e-9)
+  assert.equal(recencyFactor(undefined, now, 90), 1)
+  assert.equal(recencyFactor(0, now, 90), 1)
+})
+
+test('freshness ranks a recently used topic above a stale one', () => {
+  const now = 1_800_000_000_000
+  const fresh = doc({ filename: 'fresh.md', path: '/mem/fresh.md', name: 'fresh', description: 'same', body: 'keyword body' })
+  const stale = doc({ filename: 'stale.md', path: '/mem/stale.md', name: 'stale', description: 'same', body: 'keyword body' })
+  const usage = {
+    [fresh.path]: now,
+    [stale.path]: now - 200 * 86_400_000,
+  }
+  const hits = searchMemoryDocs([stale, fresh], 'keyword', { usage, now, halfLifeDays: 90 })
+  assert.equal(hits[0].filename, 'fresh.md')
+  assert.ok(hits[1].score < hits[0].score)
 })
 
 test('loadMemoryDocs: parses topics and skips MEMORY.md / malformed files', async () => {

@@ -21,6 +21,7 @@ import { MEMORY_TYPES } from './types.ts'
 import { ENTRYPOINT_NAME, MAX_ENTRYPOINT_BYTES, MAX_ENTRYPOINT_LINES } from './truncate.ts'
 import { validateMemoryWrites, writeMemoryFiles, memoryWritePolicy } from './writeback.ts'
 import { armPressure } from './pressure.ts'
+import { touchUsage } from './usage.ts'
 import { cwdOf, resolveWorkspaceMemoryDir } from './paths.ts'
 import type { MemorySection } from './section.ts'
 
@@ -253,6 +254,9 @@ export function registerMemorySaveTool(
           message += QUEUED_SENTENCE
         }
       }
+      // A successful save counts as use: keep the topic near the top until it
+      // ages out or stops being read.
+      void touchUsage(fs, dir, [join(dir, filename)], Date.now(), memoryWritePolicy(dir))
       return {
         path: join(dir, filename),
         message,
