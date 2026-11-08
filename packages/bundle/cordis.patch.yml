@@ -1,0 +1,12 @@
+# dsh-memory-plus bundle layer: mount the memory section + search tools and the
+# consolidation job. Installed and applied by the DSH plugin manager; no manual
+# profile patch needed.
+- insert:
+    - id: memory-plus
+      name: dsh-memory-plus
+    - id: memory-consolidation-plus
+      name: dsh-memory-consolidation-plus
+      config:
+        extractMinIntervalMinutes: 5
+        extractMinSurfaceEvents: 8
+        extractMaxPerHour: 8

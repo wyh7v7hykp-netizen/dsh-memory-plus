@@ -49,7 +49,22 @@
 
 要求：**DSH ≥ 0.2.1-rc.5**（`@deepseek-ai/dsh-fs`、`dsh-jobs`、`dsh-subagent`、`dsh-system-prompt` 等 peer）。
 
-### 从本仓库本地安装
+### 推荐：bundle 安装（可热挂载，无需重启）
+
+`packages/bundle` 是一个只负责挂载的 bundle 层。用 DSH 自带的插件管理器安装它，宿主会立即应用补丁并挂载两个插件：
+
+```text
+plugin_manager install_bundle  target=file:D:/path/to/dsh-memory-plus/packages/bundle
+```
+
+也可以在 GUI 的「设置 → 插件」里填入同一个 `file:` 规格。安装后 profile 的 bundles 列表会出现
+`dsh-memory-plus-bundle`，插件列表里 `include:memory-plus` 与 `include:memory-consolidation-plus`
+应显示为 active。
+
+> 注意：bundle 通过 `file:` 依赖指向工作树。改了源码后要重新 `pnpm build`，否则运行的是旧产物。
+
+### 备选：直接挂载（需要重启）
+
 
 ```powershell
 dsh plugin --profile desktop add "file:D:/path/to/dsh-memory-plus/packages/memory" "file:D:/path/to/dsh-memory-plus/packages/memory-consolidation"
