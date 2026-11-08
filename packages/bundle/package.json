@@ -1,29 +1,29 @@
 {
-  "name": "dsh-memory-plus-bundle",
-  "version": "0.9.3-plus.1",
-  "description": "DSH bundle wrapper: mounts dsh-memory-plus + dsh-memory-consolidation-plus as one live plugin layer",
-  "type": "module",
-  "license": "Apache-2.0",
-  "files": [
-    "cordis.patch.yml"
-  ],
-  "keywords": [
-    "dsh",
-    "dsh-bundle",
-    "memory"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/wyh7v7hykp-netizen/dsh-memory-plus.git",
-    "directory": "packages/bundle"
-  },
-  "dependencies": {
-    "dsh-memory-consolidation-plus": "file:../memory-consolidation",
-    "dsh-memory-plus": "file:../memory"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  }
+    "name":  "dsh-memory-plus-bundle",
+    "version":  "1.0.0",
+    "description":  "DSH bundle wrapper: mounts dsh-memory-plus + dsh-memory-consolidation-plus as one live plugin layer",
+    "type":  "module",
+    "license":  "Apache-2.0",
+    "files":  [
+                  "cordis.patch.yml"
+              ],
+    "keywords":  [
+                     "dsh",
+                     "dsh-bundle",
+                     "memory"
+                 ],
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/wyh7v7hykp-netizen/dsh-memory-plus.git",
+                       "directory":  "packages/bundle"
+                   },
+    "dependencies":  {
+                         "dsh-memory-consolidation-plus":  "file:../memory-consolidation",
+                         "dsh-memory-plus":  "file:../memory"
+                     },
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           }
+            }
 }

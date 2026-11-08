@@ -12,6 +12,15 @@ importers:
         specifier: ^0.28.1
         version: 0.28.2
 
+  packages/bundle:
+    dependencies:
+      dsh-memory-consolidation-plus:
+        specifier: file:../memory-consolidation
+        version: link:../memory-consolidation
+      dsh-memory-plus:
+        specifier: file:../memory
+        version: link:../memory
+
   packages/memory:
     dependencies:
       '@deepseek-ai/cordis':

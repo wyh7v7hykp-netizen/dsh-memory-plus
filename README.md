@@ -13,10 +13,29 @@ v0.9.3 with two additions:
 
 Requires **DSH ≥ 0.2.1-rc.5**.
 
+## Stable install (versioned, profile-local)
+
 ```powershell
 pnpm install
-pnpm build
-pnpm test        # 19 tests
+powershell -File scripts/release.ps1 -Version 1.0.0
+# copies the built packages to <%USERPROFILE%>\.dsh\profiles\desktop\local-packages\dsh-memory-plus\1.0.0
+```
+
+Then, from a running DSH (plugin manager):
+
+```text
+plugin_manager install_bundle target=file:C:/Users/<you>/.dsh/profiles/desktop/local-packages/dsh-memory-plus/1.0.0/bundle
+```
+
+The profile runs a **copy** of that version directory, decoupled from this
+checkout. Editing `src/` changes nothing until you publish a new version and
+reinstall (`set_bundle enabled=false` → `remove_bundle` → `install_bundle`).
+Rollback = install the previous version directory. Upstream `@dsh-cc/*`
+releases never auto-upgrade this fork.
+
+## Dev install (debug only)
+
+```powershell
 dsh plugin --profile desktop add "file:./packages/memory" "file:./packages/memory-consolidation"
 ```
 

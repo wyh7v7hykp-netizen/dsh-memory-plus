@@ -49,21 +49,31 @@
 
 要求：**DSH ≥ 0.2.1-rc.5**（`@deepseek-ai/dsh-fs`、`dsh-jobs`、`dsh-subagent`、`dsh-system-prompt` 等 peer）。
 
-### 推荐：bundle 安装（可热挂载，无需重启）
+### 推荐：稳定版安装（版本化、profile 自包含）
 
-`packages/bundle` 是一个只负责挂载的 bundle 层。用 DSH 自带的插件管理器安装它，宿主会立即应用补丁并挂载两个插件：
+发布物放在 profile 内部，由 `scripts/release.ps1` 生成：
 
 ```text
-plugin_manager install_bundle  target=file:D:/path/to/dsh-memory-plus/packages/bundle
+scripts/release.ps1 -Version 1.0.0
+  -> %USERPROFILE%\.dsh\profiles\desktop\local-packages\dsh-memory-plus\1.0.0\
+       memory\  memory-consolidation\  bundle\
 ```
 
-也可以在 GUI 的「设置 → 插件」里填入同一个 `file:` 规格。安装后 profile 的 bundles 列表会出现
-`dsh-memory-plus-bundle`，插件列表里 `include:memory-plus` 与 `include:memory-consolidation-plus`
-应显示为 active。
+安装（宿主运行中即可，由插件管理器应用补丁）：
 
-> 注意：bundle 通过 `file:` 依赖指向工作树。改了源码后要重新 `pnpm build`，否则运行的是旧产物。
+```text
+plugin_manager install_bundle target=file:C:/Users/<you>/.dsh/profiles/desktop/local-packages/dsh-memory-plus/1.0.0/bundle
+```
 
-### 备选：直接挂载（需要重启）
+- 运行的是这份**拷贝**，与开发工作树完全解耦：改 `src/` 不会影响线上。
+- **升级**：发布新版本目录 → `set_bundle enabled=false` → `remove_bundle` → `install_bundle` 新目录。显式、可回滚。
+- **回滚**：保留旧版本目录，按同样步骤重新安装旧目录。
+- **不会自动跟随上游** `@dsh-cc/*` 升级；合并上游需要人工 rebase。
+
+> 注意：`file:` 目录依赖是**拷贝**，不是链接。只跑 `pnpm build` 不会让运行中的 DSH 用上新代码，必须发布新版本并重装；`install_bundle` 同一 target 会返回 `already-installed`。
+
+### 开发态安装（仅调试，不要长期使用）
+
 
 
 ```powershell
