@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Memory consolidation lock and last-consolidated timestamp.
  *
  * The `ctx.fs` seam exposes no mtime, so the lock file's body carries the
@@ -74,6 +74,7 @@ export async function tryAcquireLock(
   pid: number,
   now: number,
   policy?: MemoryWritePolicy,
+  staleMs: number = LOCK_STALE_MS,
 ): Promise<number | null> {
   const { target, absent } = await lockTarget(fs, dir)
   let priorAt = 0
@@ -81,7 +82,7 @@ export async function tryAcquireLock(
     try {
       const { at } = parse(await fs.readText(target))
       priorAt = at
-      if (at > 0 && now - at < LOCK_STALE_MS) {
+      if (at > 0 && now - at < staleMs) {
         // A recently stamped lock is held; the stale window reclaims crashed holders.
         return null
       }

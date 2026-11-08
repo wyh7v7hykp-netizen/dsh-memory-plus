@@ -10,3 +10,7 @@
         extractMinIntervalMinutes: 5
         extractMinSurfaceEvents: 8
         extractMaxPerHour: 8
+        dreamTimeoutMinutes: 10
+        extractTimeoutMinutes: 5
+        pressureCooldownMinutes: 15
+        lockStaleMs: 900000

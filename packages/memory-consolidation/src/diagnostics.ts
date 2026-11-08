@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Dream dispatch diagnostics: a durable "why did the dream die" breadcrumb
  * inside the memory directory. The file `.dream-last-error.json` carries the
  * LATEST failure (overwrite, never append 鈥?failure is a cold path and one
@@ -25,7 +25,7 @@ import type { MemoryWritePolicy } from 'dsh-memory-plus'
 export const DREAM_DIAGNOSTIC_FILE = '.dream-last-error.json'
 
 /** The death mode the entry records. */
-export type DreamDiagnosticPhase = 'dispatch-started' | 'dispatch-throw' | 'outcome-failed'
+export type DreamDiagnosticPhase = 'dispatch-started' | 'dispatch-throw' | 'outcome-failed' | 'outcome-timeout'
 
 /** One diagnostic record; written as `{ at, pid, ...entry }` JSON. */
 export interface DreamDiagnosticEntry {

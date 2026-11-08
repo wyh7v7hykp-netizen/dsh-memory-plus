@@ -4,6 +4,35 @@ All notable changes to **dsh-memory-plus**. This project is a fork of
 [`@dsh-cc/memory`](https://github.com/dsh-cc/dsh-cc) v0.9.3 (Apache-2.0); see
 [NOTICE](./NOTICE) for attribution and the list of modifications.
 
+## [1.0.1] - 2026-11-08
+
+Fixes the convergence (dream) reliability defect found in the field on 1.0.0.
+
+### Fixed
+
+- **Dream lock leak**: when a dream fork's `activation.result` never settles
+  (child hangs), the lock stayed held until the 1 h stale window and
+  `MEMORY.md` stopped being rebuilt. Added `dreamTimeoutMinutes` (10) and
+  `extractTimeoutMinutes` (5) watchdogs: on timeout the fork is aborted, an
+  `outcome-timeout` diagnostic is recorded, and the lock is rolled back so the
+  next pressure window retries.
+- **`lockStaleMs` was dead config**: `tryAcquireLock` hard-coded the 1 h
+  constant, so the knob never applied. It now takes the configured window
+  (the bundle sets 15 min), so a crashed holder is reclaimed faster.
+- **Index drift self-heals without the model**: `healMemoryIndex` rebuilds
+  missing or dead `MEMORY.md` pointers from topic frontmatter at turn
+  boundaries (5 min throttle). A hung dream can no longer hide topic files from
+  the section or from recall.
+
+### Changed
+
+- Bundle config: `pressureCooldownMinutes: 15`, `lockStaleMs: 900000`,
+  `dreamTimeoutMinutes: 10`, `extractTimeoutMinutes: 5`.
+
+### Tests
+
+- 27 tests (8 new index-repair cases).
+
 ## [1.0.0] - 2026-11-08
 
 First stable release: versioned packaging, on-demand retrieval, and bounded

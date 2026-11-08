@@ -11,14 +11,17 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import z from '@deepseek-ai/schemastery'
 import type { ModelRoutes } from '@dsh-cc/model-aliases'
 import { toAgentOptions } from '@dsh-cc/model-aliases'
-import { resolveMemoryHome } from './paths.ts'
+import { cwdOf, resolveMemoryHome, resolveWorkspaceMemoryDir } from './paths.ts'
 import { MemorySection } from './section.ts'
 import { MemoryRecall, SubagentMemorySelector } from './recall.ts'
 import { registerMemorySaveTool } from './save.ts'
 import { registerMemorySearchTools } from './search.ts'
+import { healMemoryIndex } from './reindex.ts'
 
 export { parseMemoryFile } from './parser.ts'
 export type { ParsedMemoryFile } from './parser.ts'
@@ -86,6 +89,8 @@ export {
   registerMemorySearchTools,
 } from './search.ts'
 export type { MemoryDoc, MemoryHit, MemoryScope, MemorySearchOptions } from './search.ts'
+export { healMemoryIndex, planIndexRepair, pointerFor } from './reindex.ts'
+export type { IndexTopic } from './reindex.ts'
 
 export const name = 'memory'
 /** Core services required for section registration and event listeners. */
@@ -122,6 +127,12 @@ export interface Config {
    * residual).
    */
   teamEnabled?: boolean
+  /**
+   * Repair MEMORY.md from topic frontmatter when a pointer is missing or dead
+   * (default true). Deterministic, no model call: keeps the index consistent
+   * even when the consolidation dream is unhealthy.
+   */
+  indexSelfHeal?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -132,6 +143,7 @@ export const Config: z<Config> = z.object({
   recallAgentOptions: z.any(),
   recallUseSmallFast: z.boolean().default(false),
   teamEnabled: z.boolean().default(false),
+  indexSelfHeal: z.boolean().default(true),
 })
 
 /**
@@ -179,6 +191,21 @@ export function apply(ctx: Context, config: Config = {}): void {
   // On-demand lookup: search/read tools are independent of the section and of
   // recall. They are the only way the model can actively ask the store a
   // question; recall only ever pushes what it guesses is relevant.
+  // Deterministic index repair at turn boundaries (throttled per directory).
+  // This is the safety net for a hung or aborted dream: topic files that never
+  // got a MEMORY.md pointer become visible again without any model call.
+  if (config.indexSelfHeal ?? true) {
+    const lastHeal = new Map<string, number>()
+    ctx.on('agent/turn-stopping', ({ agent }) => {
+      const fs = ctx.get('fs') as FileSystem | undefined
+      if (fs === undefined) return
+      const dir = resolveWorkspaceMemoryDir(home, cwdOf(agent))
+      const now = Date.now()
+      if ((lastHeal.get(dir) ?? 0) + 5 * 60_000 > now) return
+      lastHeal.set(dir, now)
+      void healMemoryIndex(fs, dir)
+    })
+  }
   registerMemorySearchTools(ctx, home)
   if (config.recallEnabled ?? true) {
     new MemoryRecall(ctx, home, {

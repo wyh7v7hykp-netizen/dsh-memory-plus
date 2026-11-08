@@ -85,6 +85,14 @@ export interface Config {
   /** Session store root the gates scan (default `<DSH_HOME>/sessions`). */
   sessionsRoot?: string
   /**
+   * Abort a dream fork that produced no outcome within this many minutes and
+   * release its lock (default 10). Guards against a child that never settles,
+   * which otherwise strands `.consolidation-lock` until the stale window.
+   */
+  dreamTimeoutMinutes?: number
+  /** Abort a turn-end extraction fork that never settles (default 5). */
+  extractTimeoutMinutes?: number
+  /**
    * Minimum minutes between two turn-end extractions in one session
    * (default 5). The extraction fork inherits the conversation, so its cost
    * grows with the session; this is the cheapest brake.
@@ -115,6 +123,8 @@ export const Config: z<Config> = z.object({
   extractMinIntervalMinutes: z.number().default(5),
   extractMinSurfaceEvents: z.number().default(8),
   extractMaxPerHour: z.number().default(8),
+  dreamTimeoutMinutes: z.number().default(10),
+  extractTimeoutMinutes: z.number().default(5),
 })
 
 
@@ -151,6 +161,9 @@ export function apply(ctx: Context, config: Config = {}): void {
   const extractMinIntervalMinutes = config.extractMinIntervalMinutes ?? 5
   const extractMinSurfaceEvents = config.extractMinSurfaceEvents ?? 8
   const extractMaxPerHour = config.extractMaxPerHour ?? 8
+  const dreamTimeoutMinutes = config.dreamTimeoutMinutes ?? 10
+  const extractTimeoutMinutes = config.extractTimeoutMinutes ?? 5
+  const lockStaleMs = config.lockStaleMs ?? LOCK_STALE_MS
   // One dream in flight across the whole plugin instance (per memory dir).
   let dreamInFlight = false
 
@@ -236,7 +249,7 @@ export function apply(ctx: Context, config: Config = {}): void {
           })
           extractionTimes.push(now)
           if (extractionTimes.length > 64) extractionTimes.splice(0, extractionTimes.length - 64)
-          void runExtraction(ctx, agent, home, provider).finally(() => {
+          void runExtraction(ctx, agent, home, provider, extractTimeoutMinutes).finally(() => {
             const cur = flight.get(sessionId)
             if (cur) cur.extracting = false
           })
@@ -246,7 +259,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     if (config.dreamEnabled ?? true) {
       if (!dreamInFlight) {
         dreamInFlight = true
-        void runDream(ctx, agent, home, provider, minHours, minSessions, pressureCooldownMinutes, sessionsRoot, scan)
+        void runDream(ctx, agent, home, provider, minHours, minSessions, pressureCooldownMinutes, sessionsRoot, scan, dreamTimeoutMinutes)
           .catch((err) => { ctx.logger.warn(`memory-consolidation: dream dispatch failed: ${String(err)}`) })
           .finally(() => { dreamInFlight = false })
       }
@@ -296,7 +309,7 @@ const INDEX_CAP_LINES = 200
 const INDEX_CAP_BYTES = 8 * 1024
 const INDEX_TRUNCATED_MARKER = '(index truncated; rely on MEMORY.md in-dir for the rest)'
 
-async function runExtraction(ctx: Context, agent: Agent, home: string, provider: string): Promise<void> {
+async function runExtraction(ctx: Context, agent: Agent, home: string, provider: string, timeoutMinutes: number): Promise<void> {
   // The extraction writes into the turning agent's repository directory 鈥?  // the shared home root holds only explicitly-global memories.
   const dir = resolveWorkspaceMemoryDir(home, agentCwd(agent))
   // Only model-visible surface events count toward the batch size.
@@ -309,9 +322,14 @@ async function runExtraction(ctx: Context, agent: Agent, home: string, provider:
   // Fire-and-forget: extraction failure must never fail the turn itself. The
   // job status still reflects the real outcome (the fork's structured report
   // is validated and written host-side before `done` completes).
-  return startMemoryJob(ctx, agent, dir, provider, 'extract-memories', prompt)
-    .catch(() => {})
-    .then(() => {})
+  const job = await startMemoryJob(ctx, agent, dir, provider, 'extract-memories', prompt)
+  // A fork that never reports would otherwise pin the per-session extracting
+  // flag forever; abort it and let the next window retry.
+  const watchdog = setTimeout(() => {
+    ctx.logger.warn(`memory-consolidation: extraction fork produced no outcome in ${timeoutMinutes} min; aborting`)
+    job.abort('extraction timeout')
+  }, timeoutMinutes * 60_000)
+  void job.done.finally(() => { clearTimeout(watchdog) }).catch(() => {})
 }
 
 /**
@@ -371,6 +389,7 @@ async function runDream(
   pressureCooldownMinutes: number,
   sessionsRoot: string,
   scan: () => Promise<SessionScanResult>,
+  dreamTimeoutMinutes: number,
 ): Promise<void> {
   const fs = ctx.get('fs')
   if (fs === undefined) return
@@ -416,7 +435,7 @@ async function runDream(
     if (!pass) return
     hints = window.hints
   }
-  const priorAt = await tryAcquireLock(fs, dir, process.pid, now, policy)
+  const priorAt = await tryAcquireLock(fs, dir, process.pid, now, policy, lockStaleMs)
   if (priorAt === null) {
     ctx.logger.warn(`memory-consolidation: consolidation lock held by a live holder in ${dir}`)
     return
@@ -430,7 +449,25 @@ async function runDream(
     await recordDreamDiagnostic(ctx, fs, dir, policy, { sessionId, phase: 'dispatch-started', detail: '' })
     const prompt = buildConsolidationPrompt(dir, sessionsRoot, hints)
     const job = await startMemoryJob(ctx, agent, dir, provider, 'memory-consolidation', prompt)
+    // Watchdog: a dream fork whose result never settles must not hold the lock
+    // forever. Abort it, record the timeout, and roll the lock back so the next
+    // pressure window can retry. The pressure marker stays armed: the repair is
+    // still owed.
+    let timedOut = false
+    const watchdog = setTimeout(() => {
+      timedOut = true
+      ctx.logger.warn(`memory-consolidation: dream produced no outcome in ${dreamTimeoutMinutes} min; aborting and releasing the lock`)
+      job.abort('dream timeout')
+      void recordDreamDiagnostic(ctx, fs, dir, policy, {
+        sessionId,
+        phase: 'outcome-timeout',
+        detail: `no outcome within ${dreamTimeoutMinutes} min`,
+      })
+      void rollbackLock(fs, dir, process.pid, now, priorAt, policy)
+    }, dreamTimeoutMinutes * 60_000)
     void job.done.then(async (outcome) => {
+      clearTimeout(watchdog)
+      if (timedOut) return
       ctx.logger.debug({ event: 'memory:dream-outcome', status: outcome.status, detail: outcome.status === 'failed' ? outcome.detail : undefined })
       if (outcome.status === 'completed') {
         // Success tombs the marker in BOTH modes: a successful periodic dream
@@ -455,7 +492,13 @@ async function runDream(
       }
       try {
         const retry = await startMemoryJob(ctx, agent, dir, provider, 'memory-consolidation', prompt)
+        const retryWatchdog = setTimeout(() => {
+          ctx.logger.warn(`memory-consolidation: dream retry produced no outcome in ${dreamTimeoutMinutes} min; aborting and releasing the lock`)
+          retry.abort('dream retry timeout')
+          void rollbackLock(fs, dir, process.pid, now, priorAt, policy)
+        }, dreamTimeoutMinutes * 60_000)
         void retry.done.then(async (retryOutcome) => {
+          clearTimeout(retryWatchdog)
           ctx.logger.debug({ event: 'memory:dream-outcome', retry: true, status: retryOutcome.status, detail: retryOutcome.status === 'failed' ? retryOutcome.detail : undefined })
           if (retryOutcome.status === 'completed') {
             void clearPressure(fs, dir, now, policy)
