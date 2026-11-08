@@ -83,6 +83,7 @@ export {
   MEMORY_READ_TOOL,
   loadMemoryDocs,
   tokenizeMemoryQuery,
+  expandQueryTerms,
   scoreMemoryDoc,
   buildSnippet,
   searchMemoryDocs,
@@ -117,6 +118,18 @@ export interface Config {
    * configuring `haiku` for typed agents does not silently cross-model
    * every recall fork. Ignored when `recallAgentOptions` is set.
    */
+  /**
+   * Cap recall forks per session (default 12; 0 = unlimited). Recall stops
+   * early once every topic has been shown, but a large store can still fork
+   * many times in one session — this bounds the cost directly.
+   */
+  recallMaxPerSession?: number
+  /**
+   * Opt the recall selector into `resolve('haiku')`. Default true: when a
+   * `haiku` route exists the per-turn selector runs on the cheap lane, and
+   * when it does not the resolution returns nothing and recall inherits the
+   * parent route exactly as before.
+   */
   recallUseSmallFast?: boolean
   /**
    * Whether team memory is enabled (default false). Enables a shared
@@ -141,7 +154,8 @@ export const Config: z<Config> = z.object({
   recallEnabled: z.boolean().default(true),
   recallProviderName: z.string().default('fork'),
   recallAgentOptions: z.any(),
-  recallUseSmallFast: z.boolean().default(false),
+  recallUseSmallFast: z.boolean().default(true),
+  recallMaxPerSession: z.number().default(12),
   teamEnabled: z.boolean().default(false),
   indexSelfHeal: z.boolean().default(true),
 })
@@ -211,6 +225,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     new MemoryRecall(ctx, home, {
       providerName: config.recallProviderName ?? 'fork',
       enabled: true,
+      maxPerSession: config.recallMaxPerSession ?? 12,
       createSelector: (c, agent) => new SubagentMemorySelector(
         c,
         agent,

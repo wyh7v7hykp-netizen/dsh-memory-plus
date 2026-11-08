@@ -63,6 +63,51 @@ const STOPWORDS = new Set([
 const MAX_SNIPPET_CHARS = 240
 
 /**
+ * Deterministic operational thesaurus. Search is lexical: without embeddings,
+ * "部署" and "上线" never meet. These groups bridge the vocabulary this store
+ * actually uses (ops/deploy/memory/plugin/config) at zero model cost.
+ */
+const SYNONYM_GROUPS: readonly (readonly string[])[] = [
+  ['部署', '上线', '发布', 'deploy', 'deployment', 'rollout', 'release'],
+  ['记忆', 'memory', 'memories'],
+  ['插件', 'plugin', 'plugins', 'bundle'],
+  ['配置', 'config', 'configuration', 'settings', 'setting'],
+  ['模型', 'model', 'models', 'provider'],
+  ['成本', '费用', '开销', 'cost', 'costs', 'price'],
+  ['检索', '搜索', '查询', 'search', 'query'],
+  ['召回', 'recall'],
+  ['测试', '验证', '验证过', 'test', 'tests', 'verify'],
+  ['日志', 'log', 'logs'],
+  ['修复', 'fix', 'fixed', 'bug'],
+]
+
+/** term → its synonym group (excluding itself). */
+const SYNONYM_INDEX: ReadonlyMap<string, readonly string[]> = (() => {
+  const index = new Map<string, readonly string[]>()
+  for (const group of SYNONYM_GROUPS) {
+    for (const term of group) {
+      index.set(term.toLowerCase(), group.filter(other => other !== term))
+    }
+  }
+  return index
+})()
+
+/**
+ * Expand query terms with their operational synonyms (one hop, no model call).
+ * @param terms - tokenized query terms.
+ * @returns the union of the terms and their synonyms, deduplicated.
+ */
+export function expandQueryTerms(terms: readonly string[]): string[] {
+  const expanded = new Set(terms)
+  for (const term of terms) {
+    for (const synonym of SYNONYM_INDEX.get(term.toLowerCase()) ?? []) {
+      expanded.add(synonym.toLowerCase())
+    }
+  }
+  return [...expanded]
+}
+
+/**
  * Split a query into searchable terms: CJK runs become bigrams (plus the full
  * run for short runs), ASCII words are lowercased and stopword-filtered.
  * @param query - the raw model query.
@@ -220,7 +265,7 @@ export function searchMemoryDocs(
 ): MemoryHit[] {
   const trimmed = query.trim()
   if (trimmed.length === 0) return []
-  const terms = tokenizeMemoryQuery(trimmed)
+  const terms = expandQueryTerms(tokenizeMemoryQuery(trimmed))
   if (terms.length === 0) return []
   const phrase = trimmed.normalize('NFKC').toLowerCase()
   const limit = Math.min(Math.max(options.limit ?? 5, 1), 20)

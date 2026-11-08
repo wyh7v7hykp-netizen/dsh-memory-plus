@@ -220,10 +220,12 @@ interface SubagentLike {
 
 /** The per-agent recall coordinator. Holds the shown-path set per agent. */
 export class MemoryRecall {
-  private readonly state = new WeakMap<Agent, { shown: Set<string>; inFlight: boolean; lastQuery: string }>()
+  private readonly state = new WeakMap<Agent, { shown: Set<string>; inFlight: boolean; lastQuery: string; recalls: number }>()
   private readonly providerName: string
   private readonly createSelector: (ctx: Context, agent: Agent) => MemorySelector
   private readonly recentTools = new Set<string>()
+  /** Cap on recall forks per session (0 = unlimited). */
+  private readonly maxPerSession: number
   private readonly disposers: Array<() => void> = []
 
   /**
@@ -241,10 +243,12 @@ export class MemoryRecall {
     options: {
       providerName?: string
       enabled?: boolean
+      maxPerSession?: number
       createSelector?: (ctx: Context, agent: Agent) => MemorySelector
     } = {},
   ) {
     this.providerName = options.providerName ?? 'fork'
+    this.maxPerSession = options.maxPerSession ?? 0
     this.createSelector = options.createSelector
       ?? ((ctx, agent) => new SubagentMemorySelector(ctx, agent, this.providerName))
     if (options.enabled ?? true) {
@@ -329,7 +333,7 @@ export class MemoryRecall {
     if (topics.length === 0) return
     let entry = this.state.get(agent)
     if (entry === undefined) {
-      entry = { shown: new Set(), inFlight: false, lastQuery: '' }
+      entry = { shown: new Set(), inFlight: false, lastQuery: '', recalls: 0 }
       this.state.set(agent, entry)
     }
     // Per-agent query dedupe: the identical pending text re-presented (e.g.
@@ -341,6 +345,8 @@ export class MemoryRecall {
     // Pre-step fires once per step while a turn runs; a pending selection must
     // not pile up overlapping selectors for the same agent.
     if (entry.inFlight) return
+    if (this.maxPerSession > 0 && entry.recalls >= this.maxPerSession) return
+    entry.recalls += 1
     entry.inFlight = true
     try {
       const selected = await selector.select(

@@ -4,6 +4,30 @@ All notable changes to **dsh-memory-plus**. This project is a fork of
 [`@dsh-cc/memory`](https://github.com/dsh-cc/dsh-cc) v0.9.3 (Apache-2.0); see
 [NOTICE](./NOTICE) for attribution and the list of modifications.
 
+## [1.1.0] - 2026-11-08
+
+Cost and recall quality pass.
+
+### Added
+
+- **Operational synonym expansion** for search (11 groups: 部署/上线/发布/deploy,
+  记忆/memory, 插件/plugin, 配置/config, 模型/model, 成本/cost, 检索/search,
+  召回/recall, 测试/test, 日志/log, 修复/fix). Deterministic, zero model cost.
+  A query for `上线` now finds topics that only say `部署`.
+
+### Changed
+
+- `recallUseSmallFast` now defaults to **true**: when a `haiku` route exists the
+  per-turn recall selector runs on the cheap lane; when it does not, the
+  resolution returns nothing and recall inherits the parent route as before.
+- **`recallMaxPerSession`** (default 12) caps recall forks per session. Recall
+  still stops once every topic has been shown; this bounds the worst case.
+
+### Verified
+
+- 32 tests (2 new synonym cases).
+- Live: search `上线` returns five 部署-related topics.
+
 ## [1.0.4] - 2026-11-08
 
 The release that makes the convergence loop actually run end to end.

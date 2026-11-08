@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   tokenizeMemoryQuery,
+  expandQueryTerms,
   scoreMemoryDoc,
   buildSnippet,
   searchMemoryDocs,
@@ -73,6 +74,19 @@ test('search: Chinese query matches a Chinese body', () => {
   const hits = searchMemoryDocs([d], '周五上线')
   assert.equal(hits.length, 1)
   assert.ok(hits[0].snippet.includes('周五'))
+})
+
+test('synonym expansion bridges 部署 and 上线', () => {
+  const expanded = expandQueryTerms(['部署'])
+  assert.ok(expanded.includes('上线'))
+  assert.ok(expanded.includes('deploy'))
+  const d = doc({ body: '本次上线安排在周四凌晨。' })
+  assert.equal(searchMemoryDocs([d], '部署').length, 1)
+})
+
+test('synonym expansion does not invent matches', () => {
+  const d = doc({ filename: 'misc.md', name: 'misc', description: 'unrelated', body: '完全无关的内容：猫咪和天气。' })
+  assert.equal(searchMemoryDocs([d], '部署').length, 0)
 })
 
 test('loadMemoryDocs: parses topics and skips MEMORY.md / malformed files', async () => {
