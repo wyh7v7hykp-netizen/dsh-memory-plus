@@ -94,4 +94,5 @@ Write-Host "  plugin_manager remove_bundle target=dsh-memory-plus-bundle"
 Write-Host "  plugin_manager install_bundle target=file:$($bundlePath -replace '\\','/')"
 Write-Host ''
 Write-Host 'rollback: keep the old version directory and install it the same way.'
+$global:LASTEXITCODE = 0
 exit 0

@@ -41,8 +41,8 @@
                              "@deepseek-ai/schemastery":  "^3.18.1"
                          },
     "dependencies":  {
-                         "@dsh-cc/model-aliases":  "^0.9.3",
-                         "@dsh-cc/tools":  "^0.9.3"
+                         "@dsh-cc/model-aliases":  "0.9.3",
+                         "@dsh-cc/tools":  "0.9.3"
                      },
     "publishConfig":  {
                           "access":  "public"
