@@ -4,6 +4,56 @@ All notable changes to **dsh-memory-plus**. This project is a fork of
 [`@dsh-cc/memory`](https://github.com/dsh-cc/dsh-cc) v0.9.3 (Apache-2.0); see
 [NOTICE](./NOTICE) for attribution and the list of modifications.
 
+## [1.0.4] - 2026-11-08
+
+The release that makes the convergence loop actually run end to end.
+
+### Fixed
+
+- **`ReferenceError` swallowed every dream dispatch**: `runDream` referenced
+  `config` and `lockStaleMs`, which exist only in `apply()`'s scope. The throw
+  happened after `markPressureForced` and before the lock, then the outer
+  `.catch` swallowed it — the fingerprint was "lastForced updated, no lock, no
+  diagnostic". Both values are now explicit parameters.
+- `dispatch-started` records `mode=`, `scanned=` and `root=`, so the scan result
+  is visible in every dispatch record.
+
+### Added
+
+- `tests/dream-paths.test.mjs`: drives the real `apply()` through all three
+  outcomes with a fake fs/subagent seam — completed, blocked, timeout.
+- 30 tests total.
+
+### Verified live
+
+- 1.0.4 on the running profile: `outcome-completed`, `pressureArmedAt=0`,
+  pressure tombstoned, lock kept as `lastConsolidatedAt`, 8 topic files and
+  `MEMORY.md` rewritten by the dream at 14:16:43, and the rewritten content is
+  retrievable via `memory_search`.
+
+## [1.0.3] - 2026-11-08
+
+### Fixed
+
+- A zero session scan returned silently after consuming the pressure stamp.
+  It now records `dispatch-scan-empty` and continues with empty provenance
+  hints (`dreamRequireSessions` defaults to false). The consolidation prompt
+  renders `(none …)` when there are no hints.
+
+## [1.0.2] - 2026-11-08
+
+### Added
+
+- `outcome-completed` and `dispatch-blocked` diagnostics.
+- The success path now awaits `clearPressure` and reads the marker back,
+  recording `pressureArmedAt`.
+
+### Changed
+
+- Documented the lock's real semantics: a successful dream keeps
+  `.consolidation-lock` as the `lastConsolidatedAt` stamp; only failures and
+  timeouts roll it back to `<0>`.
+
 ## [1.0.1] - 2026-11-08
 
 Fixes the convergence (dream) reliability defect found in the field on 1.0.0.
