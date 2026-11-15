@@ -129,18 +129,23 @@ export class SubagentMemorySelector implements MemorySelector {
     // a selector child per pre-step must never linger in the residency pool.
     let activation
     try {
+      const task = {
+        prompt: [{ type: 'text' as const, text: `${system}\n\n<user_query>\n${query}\n</user_query>\n\nAvailable memories:\n${manifest}${toolsSection}` }],
+        parent: this.parent,
+        outputSchema: RECALL_FILES_SCHEMA,
+        // Defense-in-depth recursion cap: the pre-step listener already gates
+        // recall to depth-zero agents, so this child never needs to delegate.
+        maxDepth: 1,
+        ...(this.agentOptions !== undefined ? { agentOptions: this.agentOptions } : {}),
+      }
       activation = await subagents.startActivation({
         provider: this.providerName,
         label: 'memory-recall',
-        request: {
-          prompt: [{ type: 'text', text: `${system}\n\n<user_query>\n${query}\n</user_query>\n\nAvailable memories:\n${manifest}${toolsSection}` }],
-          parent: this.parent,
-          outputSchema: RECALL_FILES_SCHEMA,
-          // Defense-in-depth recursion cap: the pre-step listener already gates
-          // recall to depth-zero agents, so this child never needs to delegate.
-          maxDepth: 1,
-          ...(this.agentOptions !== undefined ? { agentOptions: this.agentOptions } : {}),
-        },
+        // 0.2.2+ reads these from the spec itself.
+        ...task,
+        // <= 0.2.1 reads them from spec.request; passing both keeps one call
+        // working across the activation-shape change.
+        request: task,
         signal,
         delivery: 'caller',
       })
@@ -203,15 +208,23 @@ interface SubagentLike {
   startActivation(spec: {
     provider: string
     label: string
-    request: {
+    // DSH 0.2.2+ takes the task fields at the top level (SubagentActivationSpec
+    // extends SubagentStartRequest) and reads spec.parent.id right away.
+    prompt: readonly { type: 'text'; text: string }[]
+    parent: Agent
+    maxDepth?: number
+    outputSchema?: Record<string, unknown>
+    agentOptions?: unknown
+    signal: AbortSignal
+    delivery: 'parent' | 'caller'
+    // DSH <= 0.2.1 read the same fields from spec.request only.
+    request?: {
       prompt: readonly { type: 'text'; text: string }[]
       parent: Agent
       maxDepth?: number
       outputSchema?: Record<string, unknown>
       agentOptions?: unknown
     }
-    signal: AbortSignal
-    delivery: 'parent' | 'caller'
   }): Promise<{
     result: Promise<{ stopReason: string; structured?: unknown }>
     dispose(): Promise<void>
