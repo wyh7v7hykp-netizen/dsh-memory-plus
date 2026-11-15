@@ -80,6 +80,18 @@ function hangingSubagents() {
   }
 }
 
+function recordingSubagents(specs) {
+  return {
+    async startActivation(spec) {
+      specs.push(spec)
+      return {
+        result: Promise.resolve({ stopReason: 'completed', structured: { writes: [] } }),
+        dispose: async () => {},
+      }
+    },
+  }
+}
+
 async function setup(t) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-mem-dream-'))
   t.after(async () => { await rm(root, { recursive: true, force: true }) })
@@ -154,8 +166,29 @@ test('dream path: completed', async (t) => {
   assert.match(created, /created by the dream harness/)
 })
 
-test('dream path: blocked by a fresh lock', async (t) => {
+test('dream path: activation spec keeps task fields at the top level (DSH >= 0.2.2)', async (t) => {
   const { root, home, cwd, dir } = await setup(t)
+  const specs = []
+  const ctx = makeCtx(seam([]), recordingSubagents(specs))
+  applyConsolidation(ctx, configFor(home, root))
+  await arm(dir)
+  await fire(ctx, cwd)
+
+  const spec = await waitFor(() => specs[0], 5000)
+  assert.ok(spec, 'startActivation was called')
+  // 0.2.2+ reads spec.parent.id immediately; a nested-only spec throws
+  // "Cannot read properties of undefined (reading 'id')" inside the host.
+  assert.ok(spec.parent, 'parent is top-level')
+  assert.equal(spec.parent.session.header.id, 'session-dream-test')
+  assert.ok(Array.isArray(spec.prompt) && spec.prompt[0]?.type === 'text', 'prompt is top-level')
+  assert.equal(spec.maxDepth, 1)
+  // <= 0.2.1 reads the same fields from spec.request; both must stay in sync.
+  assert.equal(spec.request?.parent, spec.parent)
+  assert.deepEqual(spec.request?.prompt, spec.prompt)
+  assert.equal(spec.delivery, 'caller')
+})
+
+test('dream path: blocked by a fresh lock', async (t) => {  const { root, home, cwd, dir } = await setup(t)
   const writes = []
   const ctx = makeCtx(seam(writes), completedSubagents())
   applyConsolidation(ctx, configFor(home, root))

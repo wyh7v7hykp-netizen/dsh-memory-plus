@@ -24,14 +24,24 @@ interface SubagentService {
   startActivation(spec: {
     provider: string
     label: string
-    request: {
+    // DSH 0.2.2+: SubagentActivationSpec extends SubagentStartRequest, so the
+    // task fields live at the top level and the service reads spec.parent.id
+    // immediately — a nested-only spec crashes the host with
+    // "Cannot read properties of undefined (reading 'id')".
+    prompt: readonly { type: 'text'; text: string }[]
+    parent: Agent
+    maxDepth?: number
+    outputSchema?: Record<string, unknown>
+    signal: AbortSignal
+    delivery: 'parent' | 'caller'
+    // DSH <= 0.2.1 read the same task fields from spec.request only; keep the
+    // nested copy so one call works on both runtimes.
+    request?: {
       prompt: readonly { type: 'text'; text: string }[]
       parent: Agent
       maxDepth?: number
       outputSchema?: Record<string, unknown>
     }
-    signal: AbortSignal
-    delivery: 'parent' | 'caller'
   }): Promise<{ result: Promise<SubagentResultLike>; dispose(): Promise<void> }>
 }
 
@@ -113,20 +123,25 @@ export async function startMemoryJob(
   // restriction no longer rides the start request 鈥?the composition seam
   // applies it (plan C5). The controller signal now covers ONLY cancellation
   // before publication; execution-time abort goes through `dispose()`.
+  const task = {
+    prompt: [{ type: 'text' as const, text: prompt }],
+    parent: agent,
+    // Defense-in-depth recursion cap: the top-level listener already gates on
+    // depth zero, so this fork's child never delegates. maxDepth is compared
+    // against the CHILD's resolved depth (parent + 1); a top-level parent's
+    // child resolves to 1 and passes, a grandchild to 2 is rejected.
+    maxDepth: 1,
+    outputSchema: MEMORY_WRITES_SCHEMA,
+  }
   const activation = await subagents.startActivation({
     provider,
     label,
     signal: controller.signal,
-    request: {
-      prompt: [{ type: 'text', text: prompt }],
-      parent: agent,
-      // Defense-in-depth recursion cap: the top-level listener already gates on
-      // depth zero, so this fork's child never delegates. maxDepth is compared
-      // against the CHILD's resolved depth (parent + 1); a top-level parent's
-      // child resolves to 1 and passes, a grandchild to 2 is rejected.
-      maxDepth: 1,
-      outputSchema: MEMORY_WRITES_SCHEMA,
-    },
+    // 0.2.2+ reads these from the spec itself.
+    ...task,
+    // <= 0.2.1 reads them from spec.request; passing both keeps one call
+    // working across the version that changed the activation shape.
+    request: task,
     delivery: 'caller',
   })
   // Kill the running fork exactly once (idempotent upstream): on abort, on
